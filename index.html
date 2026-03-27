@@ -22,58 +22,59 @@ canvas {
 #ui {
   position: fixed;
   top: 0; left: 0; right: 0;
-  padding: 16px 20px;
+  padding: 14px 18px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   z-index: 10;
-  background: linear-gradient(to bottom, rgba(10,10,10,0.9) 0%, transparent 100%);
+  background: linear-gradient(to bottom, rgba(10,10,10,0.95) 0%, transparent 100%);
   pointer-events: none;
+  flex-wrap: wrap;
 }
 #ui > * { pointer-events: auto; }
 h1 {
   font-family: 'Syncopate', sans-serif;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #D4A853;
-  letter-spacing: 4px;
-  text-shadow: 0 0 20px rgba(212,168,83,0.5);
+  letter-spacing: 3px;
+  text-shadow: 0 0 20px rgba(212,168,83,0.6);
 }
 .label {
   font-family: 'Rajdhani', sans-serif;
-  font-size: 11px;
-  color: #666;
+  font-size: 10px;
+  color: #555;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
 .btn {
-  background: rgba(212,168,83,0.08);
-  border: 1px solid rgba(212,168,83,0.3);
+  background: rgba(212,168,83,0.06);
+  border: 1px solid rgba(212,168,83,0.25);
   color: #D4A853;
-  padding: 6px 14px;
+  padding: 5px 12px;
   font-family: 'Space Mono', monospace;
-  font-size: 10px;
+  font-size: 9px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   letter-spacing: 1px;
 }
 .btn:hover {
-  background: rgba(212,168,83,0.2);
+  background: rgba(212,168,83,0.18);
   border-color: #D4A853;
-  box-shadow: 0 0 10px rgba(212,168,83,0.3);
+  box-shadow: 0 0 12px rgba(212,168,83,0.3);
 }
 .btn.active {
-  background: rgba(212,168,83,0.25);
+  background: rgba(212,168,83,0.22);
   border-color: #D4A853;
   box-shadow: 0 0 15px rgba(212,168,83,0.4);
 }
 .slider-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .slider-wrap label {
-  font-size: 10px;
+  font-size: 9px;
   color: #00ff88;
   font-family: 'Rajdhani', sans-serif;
   text-transform: uppercase;
@@ -81,41 +82,64 @@ h1 {
 }
 input[type=range] {
   -webkit-appearance: none;
-  width: 90px;
-  height: 4px;
-  background: rgba(0,255,136,0.2);
+  width: 80px;
+  height: 3px;
+  background: rgba(0,255,136,0.15);
   border-radius: 2px;
   outline: none;
 }
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px; height: 12px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   background: #00ff88;
-  box-shadow: 0 0 8px rgba(0,255,136,0.6);
+  box-shadow: 0 0 6px rgba(0,255,136,0.7);
   cursor: pointer;
 }
-.mode-info {
-  font-size: 10px;
-  color: #00ff88;
+.info-display {
+  font-size: 9px;
+  color: #888;
   font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 1px;
+}
+.info-display span { color: #00ff88; }
+.damage-bar {
+  width: 60px; height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.damage-fill {
+  height: 100%;
+  background: linear-gradient(to right, #00ff88, #ffcc00, #ff4466);
+  transition: width 0.1s;
+  border-radius: 2px;
 }
 #hint {
   position: fixed;
-  bottom: 20px;
+  bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
   font-family: 'Rajdhani', sans-serif;
-  font-size: 12px;
-  color: rgba(212,168,83,0.4);
+  font-size: 11px;
+  color: rgba(212,168,83,0.35);
   letter-spacing: 2px;
   text-align: center;
   pointer-events: none;
   z-index: 10;
 }
+#shatter-flash {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0);
+  pointer-events: none;
+  z-index: 5;
+  transition: background 0.05s;
+}
 </style>
 </head>
 <body>
+<div id="shatter-flash"></div>
 <canvas id="c"></canvas>
 <div id="ui">
   <h1>VECTOR STORM</h1>
@@ -124,7 +148,7 @@ input[type=range]::-webkit-slider-thumb {
   <button class="btn" id="btn-quad" onclick="setShape('quad')">QUAD</button>
   <button class="btn" id="btn-hex" onclick="setShape('hex')">HEX</button>
   <button class="btn" id="btn-star" onclick="setShape('star')">STAR</button>
-  <span class="label" style="margin-left:8px">MODE</span>
+  <span class="label" style="margin-left:6px">MODE</span>
   <button class="btn active" id="btn-drag" onclick="setMode('drag')">DRAG</button>
   <button class="btn" id="btn-attract" onclick="setMode('attract')">ATTRACT</button>
   <button class="btn" id="btn-repel" onclick="setMode('repel')">REPEL</button>
@@ -141,14 +165,24 @@ input[type=range]::-webkit-slider-thumb {
     <label>GRAVITY</label>
     <input type="range" id="sGrav" min="0" max="100" value="0">
   </span>
-  <button class="btn" onclick="clearAll()" style="margin-left:8px">CLEAR</button>
-  <span class="mode-info" id="count">0 shapes</span>
+  <span class="slider-wrap">
+    <label>SENSITIVITY</label>
+    <input type="range" id="sSens" min="1" max="20" value="8">
+  </span>
+  <button class="btn" onclick="clearAll()" style="margin-left:4px">CLEAR</button>
+  <span class="info-display">MAX VEL: <span id="maxVel">0.0</span></span>
+  <span class="info-display">COLLISIONS: <span id="colCount">0</span></span>
+  <span class="info-display" id="count">0 shapes</span>
 </div>
-<div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG SHAPES TO THROW &nbsp;|&nbsp; SPACE TO CLEAR</div>
+<div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG TO THROW &nbsp;|&nbsp; COLLISIONS DAMAGE SHAPES &nbsp;|&nbsp; SPACE TO CLEAR</div>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const shatterFlash = document.getElementById('shatter-flash');
 let W, H, cx, cy;
+
+let shakeX = 0, shakeY = 0;
+let shakeDecay = 0;
 
 function resize() {
   W = canvas.width = window.innerWidth;
@@ -175,6 +209,8 @@ initStars();
 // State
 let shapes = [];
 let particles = [];
+let debris = []; // small fragments from damaged shapes
+let sparks = []; // collision sparks
 let dragged = null;
 let dragOffX = 0, dragOffY = 0;
 let mouseX = 0, mouseY = 0;
@@ -183,8 +219,15 @@ let currentMode = 'drag';
 let sizeMult = 1;
 let glowMult = 1;
 let gravMult = 0;
+let sensMult = 1;
 let mouseDown = false;
 let mouseDownX = 0, mouseDownY = 0;
+let collisionCount = 0;
+let maxVel = 0;
+let lastMaxVel = 0;
+
+const shatterThreshold = 7.5; // speed at which shapes shatter
+const damageThreshold = 4.5;  // speed at which shapes start taking damage
 
 function setShape(s) {
   currentShape = s;
@@ -200,9 +243,11 @@ function setMode(m) {
 document.getElementById('sSize').addEventListener('input', e => { sizeMult = e.target.value / 50; });
 document.getElementById('sGlow').addEventListener('input', e => { glowMult = e.target.value / 15; });
 document.getElementById('sGrav').addEventListener('input', e => { gravMult = e.target.value / 100; });
+document.getElementById('sSens').addEventListener('input', e => { sensMult = e.target.value / 8; });
 
-function createPoly(x, y, type, vx, vy) {
-  const size = 50 * sizeMult;
+function createPoly(x, y, type, vx, vy, scale) {
+  scale = scale || 1;
+  const size = 50 * sizeMult * scale;
   let sides, radius;
   switch(type) {
     case 'tri': sides = 3; radius = size; break;
@@ -222,8 +267,14 @@ function createPoly(x, y, type, vx, vy) {
   const color = colors[Math.floor(Math.random() * colors.length)];
   return {
     x, y, vx, vy, verts, color, alpha: 1, rotation: Math.random() * Math.PI * 2,
-    rotSpeed: (Math.random() - 0.5) * 0.05,
-    trail: [], size
+    rotSpeed: (Math.random() - 0.5) * 0.04,
+    trail: [], size,
+    damage: 0, // 0 to 1
+    scale,
+    type,
+    originalColor: color,
+    wobble: 0, // vertex jitter from damage
+    flash: 0   // white flash on hit
   };
 }
 
@@ -234,36 +285,110 @@ function spawnShape(x, y) {
   updateCount();
 }
 
-function shatter(shape) {
-  const count = Math.floor(shape.verts.length * 3 + shape.size * 0.5);
+function flashScreen() {
+  shatterFlash.style.background = 'rgba(255,255,255,0.08)';
+  setTimeout(() => { shatterFlash.style.background = 'rgba(255,255,255,0)'; }, 60);
+}
+
+function shake(intensity) {
+  shakeX = (Math.random() - 0.5) * intensity;
+  shakeY = (Math.random() - 0.5) * intensity;
+  shakeDecay = intensity;
+}
+
+function spawnSparks(x, y, color, count, speedMult) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 6 + 2;
+    const speed = (Math.random() * 6 + 2) * speedMult;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.06 + 0.04,
+      size: Math.random() * 2.5 + 0.5,
+      color
+    });
+  }
+  // White hot core
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 8 + 3;
+    sparks.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, decay: 0.1,
+      size: Math.random() * 1.5 + 0.5,
+      color: '#ffffff'
+    });
+  }
+}
+
+function shatter(shape, skipParticles) {
+  const count = Math.floor(shape.verts.length * 2 + shape.size * 0.3);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 5 + 1.5;
     const color = shape.color;
     particles.push({
-      x: shape.x + (Math.random() - 0.5) * 20,
-      y: shape.y + (Math.random() - 0.5) * 20,
-      vx: Math.cos(angle) * speed + shape.vx * 0.3,
-      vy: Math.sin(angle) * speed + shape.vy * 0.3,
+      x: shape.x + (Math.random() - 0.5) * shape.size,
+      y: shape.y + (Math.random() - 0.5) * shape.size,
+      vx: Math.cos(angle) * speed + shape.vx * 0.2,
+      vy: Math.sin(angle) * speed + shape.vy * 0.2,
       life: 1,
-      decay: Math.random() * 0.025 + 0.015,
+      decay: Math.random() * 0.018 + 0.012,
       size: Math.random() * 3 + 1,
       color
     });
   }
-  // Extra spark burst
-  for (let i = 0; i < 12; i++) {
+  // Debris fragments
+  const debrisCount = Math.floor(3 + shape.scale * 2);
+  for (let i = 0; i < debrisCount; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 10 + 4;
-    particles.push({
+    const speed = Math.random() * 3 + 0.5;
+    debris.push({
       x: shape.x, y: shape.y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      life: 1, decay: 0.04,
-      size: Math.random() * 2 + 0.5,
-      color: '#ffffff'
+      vx: Math.cos(angle) * speed + shape.vx * 0.3,
+      vy: Math.sin(angle) * speed + shape.vy * 0.3,
+      life: 1,
+      decay: Math.random() * 0.008 + 0.005,
+      size: Math.random() * 6 + 3,
+      color: shape.color,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.15
     });
   }
+  if (!skipParticles) {
+    flashScreen();
+    shake(8 * shape.scale);
+    spawnSparks(shape.x, shape.y, shape.color, 15, 1.2);
+  }
+}
+
+function damageShape(shape, impactSpeed) {
+  const dmg = (impactSpeed - damageThreshold) / (shatterThreshold - damageThreshold) * 0.35;
+  if (dmg > 0) {
+    shape.damage = Math.min(1, shape.damage + dmg);
+    shape.flash = 1;
+    shape.wobble = shape.damage * 4;
+    // Damage color shift: bright -> red-tinted
+    if (shape.damage > 0.5) {
+      const t = (shape.damage - 0.5) * 2;
+      shape.color = lerpColor(shape.originalColor, '#ff2222', t * 0.6);
+    }
+  }
+}
+
+function lerpColor(a, b, t) {
+  const ah = parseInt(a.slice(1), 16);
+  const bh = parseInt(b.slice(1), 16);
+  const ar = (ah >> 16) & 0xff, ag = (ah >> 8) & 0xff, ab = ah & 0xff;
+  const br = (bh >> 16) & 0xff, bg = (bh >> 8) & 0xff, bb = bh & 0xff;
+  const rr = Math.round(ar + (br - ar) * t);
+  const rg = Math.round(ag + (bg - ag) * t);
+  const rb = Math.round(ab + (bb - ab) * t);
+  return '#' + ((1 << 24) + (rr << 16) + (rg << 8) + rb).toString(16).slice(1);
 }
 
 function updateCount() {
@@ -275,33 +400,70 @@ function checkCollision(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  return dist < (a.size + b.size) * 0.8;
+  return dist < (a.size + b.size) * 0.75;
 }
 
 function update() {
   const g = 0.15 * gravMult;
+
+  // Decay shake
+  if (shakeDecay > 0) {
+    shakeX *= 0.85;
+    shakeY *= 0.85;
+    shakeDecay *= 0.85;
+    if (shakeDecay < 0.2) { shakeX = 0; shakeY = 0; shakeDecay = 0; }
+  }
+
+  // Apply mode forces
+  for (let i = 0; i < shapes.length; i++) {
+    const s = shapes[i];
+    if (s === dragged) continue;
+
+    if (currentMode === 'attract') {
+      const dx = cx - s.x, dy = cy - s.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      s.vx += (dx / dist) * 0.08 * sensMult;
+      s.vy += (dy / dist) * 0.08 * sensMult;
+    } else if (currentMode === 'repel') {
+      const dx = s.x - cx, dy = s.y - cy;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      s.vx += (dx / dist) * 0.15 * sensMult;
+      s.vy += (dy / dist) * 0.15 * sensMult;
+    }
+  }
+
+  let newMaxVel = 0;
 
   for (let i = shapes.length - 1; i >= 0; i--) {
     const s = shapes[i];
     if (s === dragged) continue;
 
     s.vy += g;
-    s.vx *= 0.998;
-    s.vy *= 0.998;
+    s.vx *= 0.997;
+    s.vy *= 0.997;
     s.x += s.vx;
     s.y += s.vy;
     s.rotation += s.rotSpeed;
+
+    // Damage decay
+    s.damage *= 0.992;
+    s.flash *= 0.8;
+    s.wobble *= 0.92;
+
+    // Track max velocity
+    const vel = Math.sqrt(s.vx*s.vx + s.vy*s.vy);
+    if (vel > newMaxVel) newMaxVel = vel;
 
     // Trail
     s.trail.push({ x: s.x, y: s.y });
     if (s.trail.length > 20) s.trail.shift();
 
     // Bounce
-    const margin = s.size * 0.8;
-    if (s.x < margin) { s.x = margin; s.vx = Math.abs(s.vx) * 0.7; }
-    if (s.x > W - margin) { s.x = W - margin; s.vx = -Math.abs(s.vx) * 0.7; }
-    if (s.y < margin) { s.y = margin; s.vy = Math.abs(s.vy) * 0.7; }
-    if (s.y > H - margin) { s.y = H - margin; s.vy = -Math.abs(s.vy) * 0.7; }
+    const margin = s.size * 0.7;
+    if (s.x < margin) { s.x = margin; s.vx = Math.abs(s.vx) * 0.65; }
+    if (s.x > W - margin) { s.x = W - margin; s.vx = -Math.abs(s.vx) * 0.65; }
+    if (s.y < margin) { s.y = margin; s.vy = Math.abs(s.vy) * 0.65; }
+    if (s.y > H - margin) { s.y = H - margin; s.vy = -Math.abs(s.vy) * 0.65; }
 
     // Shape collisions
     for (let j = i + 1; j < shapes.length; j++) {
@@ -314,19 +476,46 @@ function update() {
         const nx = dx / dist, ny = dy / dist;
         const relV = (s.vx - s2.vx) * nx + (s.vy - s2.vy) * ny;
         if (relV < 0) {
-          const imp = -relV * 0.8;
+          collisionCount++;
+          const impactSpeed = Math.abs(relV);
+          const imp = -relV * 0.75;
           s.vx += nx * imp; s.vy += ny * imp;
           s2.vx -= nx * imp; s2.vy -= ny * imp;
           // Separate
-          const overlap = (s.size + s2.size) * 0.8 - dist;
+          const overlap = (s.size + s2.size) * 0.75 - dist;
           if (overlap > 0) {
             s.x += nx * overlap * 0.5; s.y += ny * overlap * 0.5;
             s2.x -= nx * overlap * 0.5; s2.y -= ny * overlap * 0.5;
           }
-          // Speed check for shatter
-          const speed = Math.sqrt(s.vx*s.vx + s.vy*s.vy) + Math.sqrt(s2.vx*s2.vx + s2.vy*s2.vy);
-          if (speed > 8) {
-            shatter(s); shatter(s2);
+          // Apply damage from impact
+          damageShape(s, impactSpeed);
+          damageShape(s2, impactSpeed);
+          // Spawn sparks on impact
+          const impactX = (s.x + s2.x) / 2;
+          const impactY = (s.y + s2.y) / 2;
+          spawnSparks(impactX, impactY, '#ffffff', Math.floor(impactSpeed * 1.5), 0.8);
+          if (impactSpeed > 3) shake(impactSpeed * 0.5);
+          // Check for shatter
+          const sSpeed = Math.sqrt(s.vx*s.vx + s.vy*s.vy);
+          const s2Speed = Math.sqrt(s2.vx*s2.vx + s2.vy*s2.vy);
+          const combinedSpeed = (sSpeed + s2Speed) / 2;
+          // Shatter if damaged AND high speed, or just very high speed
+          if (s.damage > 0.5 && impactSpeed > damageThreshold) {
+            shatter(s);
+            spawnSparks(s.x, s.y, s.color, 8, 1);
+            shapes.splice(i, 1); j--;
+            updateCount();
+            continue;
+          } else if (s2.damage > 0.5 && impactSpeed > damageThreshold) {
+            shatter(s2);
+            spawnSparks(s2.x, s2.y, s2.color, 8, 1);
+            shapes.splice(j, 1);
+            continue;
+          } else if (combinedSpeed > shatterThreshold * 1.1) {
+            // Clean high-speed shatter
+            shatter(s);
+            shatter(s2);
+            spawnSparks(impactX, impactY, '#ffffff', 10, 1.5);
             shapes.splice(j, 1); shapes.splice(i, 1);
             updateCount();
             break;
@@ -336,46 +525,96 @@ function update() {
     }
   }
 
+  if (newMaxVel > lastMaxVel + 0.1) {
+    maxVel = newMaxVel;
+    lastMaxVel = newMaxVel;
+  }
+  maxVel *= 0.99;
+
   // Particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx; p.y += p.vy;
-    p.vy += g * 0.5;
+    p.vy += g * 0.3;
     p.vx *= 0.98; p.vy *= 0.98;
     p.life -= p.decay;
     if (p.life <= 0) particles.splice(i, 1);
   }
+
+  // Debris
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const d = debris[i];
+    d.x += d.vx; d.y += d.vy;
+    d.vy += g * 0.2;
+    d.vx *= 0.99; d.vy *= 0.99;
+    d.rotation += d.rotSpeed;
+    d.life -= d.decay;
+    if (d.life <= 0) debris.splice(i, 1);
+  }
+
+  // Sparks
+  for (let i = sparks.length - 1; i >= 0; i--) {
+    const p = sparks[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.95; p.vy *= 0.95;
+    p.life -= p.decay;
+    if (p.life <= 0) sparks.splice(i, 1);
+  }
+
+  // Update HUD
+  document.getElementById('maxVel').textContent = maxVel.toFixed(1);
+  document.getElementById('colCount').textContent = collisionCount;
 }
 
-function drawPoly(verts, x, y, rotation, color, size, alpha, glow) {
+function drawPoly(verts, x, y, rotation, color, size, alpha, glow, wobble) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(x, y);
   ctx.rotate(rotation);
 
-  // Glow
   ctx.shadowBlur = glow;
   ctx.shadowColor = color;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
   verts.forEach((v, i) => {
-    if (i === 0) ctx.moveTo(v.x, v.y);
-    else ctx.lineTo(v.x, v.y);
+    const wx = wobble ? (Math.random() - 0.5) * wobble : 0;
+    const wy = wobble ? (Math.random() - 0.5) * wobble : 0;
+    if (i === 0) ctx.moveTo(v.x + wx, v.y + wy);
+    else ctx.lineTo(v.x + wx, v.y + wy);
   });
   ctx.closePath();
   ctx.stroke();
 
-  // Inner fill
-  ctx.fillStyle = color + '15';
+  // Fill
+  ctx.fillStyle = color + '18';
   ctx.fill();
 
   ctx.restore();
 }
 
+function drawDamageIndicator(shape) {
+  if (shape.damage < 0.15) return;
+  const t = shape.damage;
+  ctx.save();
+  ctx.translate(shape.x, shape.y);
+  ctx.globalAlpha = t * 0.6;
+  ctx.strokeStyle = '#ff2222';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 4]);
+  ctx.beginPath();
+  ctx.arc(0, 0, shape.size * 1.1, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function draw() {
+  ctx.save();
+  if (shakeX || shakeY) ctx.translate(shakeX, shakeY);
+
   ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(-10, -10, W + 20, H + 20);
 
   // Stars
   stars.forEach(s => {
@@ -396,10 +635,10 @@ function draw() {
     for (let i = 1; i < s.trail.length; i++) {
       const t = s.trail[i];
       const prev = s.trail[i - 1];
-      ctx.globalAlpha = (i / s.trail.length) * 0.15;
+      ctx.globalAlpha = (i / s.trail.length) * 0.12;
       ctx.strokeStyle = s.color;
       ctx.lineWidth = 1;
-      ctx.shadowBlur = 4;
+      ctx.shadowBlur = 3;
       ctx.shadowColor = s.color;
       ctx.beginPath();
       ctx.moveTo(prev.x, prev.y);
@@ -409,33 +648,66 @@ function draw() {
     ctx.restore();
   });
 
+  // Damage rings
+  shapes.forEach(s => drawDamageIndicator(s));
+
   // Shapes
   shapes.forEach(s => {
     if (s !== dragged) {
-      drawPoly(s.verts, s.x, s.y, s.rotation, s.color, s.size, s.alpha, glow);
+      const flashAmt = s.flash;
+      const col = flashAmt > 0.1 ? lerpColor(s.color, '#ffffff', flashAmt * 0.7) : s.color;
+      drawPoly(s.verts, s.x, s.y, s.rotation, col, s.size, s.alpha, glow + s.flash * 10, s.wobble);
     }
   });
 
   // Dragged on top
   if (dragged) {
-    drawPoly(dragged.verts, dragged.x, dragged.y, dragged.rotation, dragged.color, dragged.size, 1, glow * 2);
+    drawPoly(dragged.verts, dragged.x, dragged.y, dragged.rotation, '#ffffff', dragged.size, 1, glow * 2.5, 0);
   }
+
+  // Debris
+  debris.forEach(d => {
+    ctx.save();
+    ctx.globalAlpha = d.life * 0.8;
+    ctx.translate(d.x, d.y);
+    ctx.rotate(d.rotation);
+    ctx.shadowBlur = 5;
+    ctx.shadowColor = d.color;
+    ctx.strokeStyle = d.color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-d.size/2, -d.size/2, d.size, d.size);
+    ctx.fillStyle = d.color + '20';
+    ctx.fillRect(-d.size/2, -d.size/2, d.size, d.size);
+    ctx.restore();
+  });
 
   // Particles
   particles.forEach(p => {
     ctx.globalAlpha = p.life;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 6;
     ctx.shadowColor = p.color;
     ctx.fillStyle = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
   });
+
+  // Sparks (on top)
+  sparks.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = p.color;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
-// Mouse interactions
 function getShapeAt(x, y) {
   for (let i = shapes.length - 1; i >= 0; i--) {
     const s = shapes[i];
@@ -490,7 +762,6 @@ canvas.addEventListener('mouseleave', () => {
   mouseDown = false;
 });
 
-// Touch
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   const t = e.touches[0];
@@ -541,10 +812,16 @@ document.addEventListener('keydown', e => {
 function clearAll() {
   shapes.forEach(s => shatter(s));
   shapes = [];
+  debris = [];
+  particles = [];
+  sparks = [];
+  collisionCount = 0;
+  maxVel = 0;
+  lastMaxVel = 0;
   updateCount();
 }
 
-// Spawn a few initial shapes for demo
+// Spawn initial demo shapes
 setTimeout(() => {
   for (let i = 0; i < 3; i++) {
     const x = W * 0.3 + Math.random() * W * 0.4;
