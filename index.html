@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VECTOR STORM</title>
+<link href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Space+Mono:wght@400;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a;
+  overflow: hidden;
+  font-family: 'Space Mono', monospace;
+  user-select: none;
+}
+canvas {
+  display: block;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+}
+#ui {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  z-index: 10;
+  background: linear-gradient(to bottom, rgba(10,10,10,0.9) 0%, transparent 100%);
+  pointer-events: none;
+}
+#ui > * { pointer-events: auto; }
+h1 {
+  font-family: 'Syncopate', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #D4A853;
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px rgba(212,168,83,0.5);
+}
+.label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.btn {
+  background: rgba(212,168,83,0.08);
+  border: 1px solid rgba(212,168,83,0.3);
+  color: #D4A853;
+  padding: 6px 14px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+.btn:hover {
+  background: rgba(212,168,83,0.2);
+  border-color: #D4A853;
+  box-shadow: 0 0 10px rgba(212,168,83,0.3);
+}
+.btn.active {
+  background: rgba(212,168,83,0.25);
+  border-color: #D4A853;
+  box-shadow: 0 0 15px rgba(212,168,83,0.4);
+}
+.slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slider-wrap label {
+  font-size: 10px;
+  color: #00ff88;
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+input[type=range] {
+  -webkit-appearance: none;
+  width: 90px;
+  height: 4px;
+  background: rgba(0,255,136,0.2);
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #00ff88;
+  box-shadow: 0 0 8px rgba(0,255,136,0.6);
+  cursor: pointer;
+}
+.mode-info {
+  font-size: 10px;
+  color: #00ff88;
+  font-family: 'Rajdhani', sans-serif;
+}
+#hint {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 12px;
+  color: rgba(212,168,83,0.4);
+  letter-spacing: 2px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 10;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>VECTOR STORM</h1>
+  <span class="label">SPAWN</span>
+  <button class="btn active" id="btn-tri" onclick="setShape('tri')">TRI</button>
+  <button class="btn" id="btn-quad" onclick="setShape('quad')">QUAD</button>
+  <button class="btn" id="btn-hex" onclick="setShape('hex')">HEX</button>
+  <button class="btn" id="btn-star" onclick="setShape('star')">STAR</button>
+  <span class="label" style="margin-left:8px">MODE</span>
+  <button class="btn active" id="btn-drag" onclick="setMode('drag')">DRAG</button>
+  <button class="btn" id="btn-attract" onclick="setMode('attract')">ATTRACT</button>
+  <button class="btn" id="btn-repel" onclick="setMode('repel')">REPEL</button>
+  <button class="btn" id="btn-gravity" onclick="setMode('gravity')">GRAVITY</button>
+  <span class="slider-wrap">
+    <label>SIZE</label>
+    <input type="range" id="sSize" min="20" max="120" value="50">
+  </span>
+  <span class="slider-wrap">
+    <label>GLOW</label>
+    <input type="range" id="sGlow" min="1" max="40" value="15">
+  </span>
+  <span class="slider-wrap">
+    <label>GRAVITY</label>
+    <input type="range" id="sGrav" min="0" max="100" value="0">
+  </span>
+  <button class="btn" onclick="clearAll()" style="margin-left:8px">CLEAR</button>
+  <span class="mode-info" id="count">0 shapes</span>
+</div>
+<div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG SHAPES TO THROW &nbsp;|&nbsp; SPACE TO CLEAR</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, cx, cy;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cx = W / 2; cy = H / 2;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Stars background
+const stars = [];
+function initStars() {
+  for (let i = 0; i < 200; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      size: Math.random() * 1.5 + 0.3,
+      alpha: Math.random() * 0.4 + 0.1
+    });
+  }
+}
+initStars();
+
+// State
+let shapes = [];
+let particles = [];
+let dragged = null;
+let dragOffX = 0, dragOffY = 0;
+let mouseX = 0, mouseY = 0;
+let currentShape = 'tri';
+let currentMode = 'drag';
+let sizeMult = 1;
+let glowMult = 1;
+let gravMult = 0;
+let mouseDown = false;
+let mouseDownX = 0, mouseDownY = 0;
+
+function setShape(s) {
+  currentShape = s;
+  document.querySelectorAll('#btn-tri,#btn-quad,#btn-hex,#btn-star').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + s).classList.add('active');
+}
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('#btn-drag,#btn-attract,#btn-repel,#btn-gravity').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + m).classList.add('active');
+}
+
+document.getElementById('sSize').addEventListener('input', e => { sizeMult = e.target.value / 50; });
+document.getElementById('sGlow').addEventListener('input', e => { glowMult = e.target.value / 15; });
+document.getElementById('sGrav').addEventListener('input', e => { gravMult = e.target.value / 100; });
+
+function createPoly(x, y, type, vx, vy) {
+  const size = 50 * sizeMult;
+  let sides, radius;
+  switch(type) {
+    case 'tri': sides = 3; radius = size; break;
+    case 'quad': sides = 4; radius = size * 0.8; break;
+    case 'hex': sides = 6; radius = size * 0.9; break;
+    case 'star': sides = 5; radius = size; break;
+    default: sides = 3; radius = size;
+  }
+  const verts = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+    let r = radius;
+    if (type === 'star') r = (i % 2 === 0) ? radius : radius * 0.4;
+    verts.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+  }
+  const colors = ['#D4A853','#00ff88','#ff4466','#44aaff','#ff88ff','#ffcc00'];
+  const color = colors[Math.floor(Math.random() * colors.length)];
+  return {
+    x, y, vx, vy, verts, color, alpha: 1, rotation: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.05,
+    trail: [], size
+  };
+}
+
+function spawnShape(x, y) {
+  const vx = (Math.random() - 0.5) * 2;
+  const vy = (Math.random() - 0.5) * 2;
+  shapes.push(createPoly(x, y, currentShape, vx, vy));
+  updateCount();
+}
+
+function shatter(shape) {
+  const count = Math.floor(shape.verts.length * 3 + shape.size * 0.5);
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 6 + 2;
+    const color = shape.color;
+    particles.push({
+      x: shape.x + (Math.random() - 0.5) * 20,
+      y: shape.y + (Math.random() - 0.5) * 20,
+      vx: Math.cos(angle) * speed + shape.vx * 0.3,
+      vy: Math.sin(angle) * speed + shape.vy * 0.3,
+      life: 1,
+      decay: Math.random() * 0.025 + 0.015,
+      size: Math.random() * 3 + 1,
+      color
+    });
+  }
+  // Extra spark burst
+  for (let i = 0; i < 12; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 10 + 4;
+    particles.push({
+      x: shape.x, y: shape.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, decay: 0.04,
+      size: Math.random() * 2 + 0.5,
+      color: '#ffffff'
+    });
+  }
+}
+
+function updateCount() {
+  document.getElementById('count').textContent = shapes.length + ' shape' + (shapes.length !== 1 ? 's' : '');
+}
+
+// Collision between two shapes
+function checkCollision(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  return dist < (a.size + b.size) * 0.8;
+}
+
+function update() {
+  const g = 0.15 * gravMult;
+
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    const s = shapes[i];
+    if (s === dragged) continue;
+
+    s.vy += g;
+    s.vx *= 0.998;
+    s.vy *= 0.998;
+    s.x += s.vx;
+    s.y += s.vy;
+    s.rotation += s.rotSpeed;
+
+    // Trail
+    s.trail.push({ x: s.x, y: s.y });
+    if (s.trail.length > 20) s.trail.shift();
+
+    // Bounce
+    const margin = s.size * 0.8;
+    if (s.x < margin) { s.x = margin; s.vx = Math.abs(s.vx) * 0.7; }
+    if (s.x > W - margin) { s.x = W - margin; s.vx = -Math.abs(s.vx) * 0.7; }
+    if (s.y < margin) { s.y = margin; s.vy = Math.abs(s.vy) * 0.7; }
+    if (s.y > H - margin) { s.y = H - margin; s.vy = -Math.abs(s.vy) * 0.7; }
+
+    // Shape collisions
+    for (let j = i + 1; j < shapes.length; j++) {
+      const s2 = shapes[j];
+      if (s === dragged || s2 === dragged) continue;
+      if (checkCollision(s, s2)) {
+        const dx = s.x - s2.x;
+        const dy = s.y - s2.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const nx = dx / dist, ny = dy / dist;
+        const relV = (s.vx - s2.vx) * nx + (s.vy - s2.vy) * ny;
+        if (relV < 0) {
+          const imp = -relV * 0.8;
+          s.vx += nx * imp; s.vy += ny * imp;
+          s2.vx -= nx * imp; s2.vy -= ny * imp;
+          // Separate
+          const overlap = (s.size + s2.size) * 0.8 - dist;
+          if (overlap > 0) {
+            s.x += nx * overlap * 0.5; s.y += ny * overlap * 0.5;
+            s2.x -= nx * overlap * 0.5; s2.y -= ny * overlap * 0.5;
+          }
+          // Speed check for shatter
+          const speed = Math.sqrt(s.vx*s.vx + s.vy*s.vy) + Math.sqrt(s2.vx*s2.vx + s2.vy*s2.vy);
+          if (speed > 8) {
+            shatter(s); shatter(s2);
+            shapes.splice(j, 1); shapes.splice(i, 1);
+            updateCount();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += g * 0.5;
+    p.vx *= 0.98; p.vy *= 0.98;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawPoly(verts, x, y, rotation, color, size, alpha, glow) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+
+  // Glow
+  ctx.shadowBlur = glow;
+  ctx.shadowColor = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  verts.forEach((v, i) => {
+    if (i === 0) ctx.moveTo(v.x, v.y);
+    else ctx.lineTo(v.x, v.y);
+  });
+  ctx.closePath();
+  ctx.stroke();
+
+  // Inner fill
+  ctx.fillStyle = color + '15';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  stars.forEach(s => {
+    ctx.globalAlpha = s.alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  const glow = 15 * glowMult;
+
+  // Trails
+  shapes.forEach(s => {
+    if (s.trail.length < 2) return;
+    ctx.save();
+    for (let i = 1; i < s.trail.length; i++) {
+      const t = s.trail[i];
+      const prev = s.trail[i - 1];
+      ctx.globalAlpha = (i / s.trail.length) * 0.15;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = s.color;
+      ctx.beginPath();
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(t.x, t.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+
+  // Shapes
+  shapes.forEach(s => {
+    if (s !== dragged) {
+      drawPoly(s.verts, s.x, s.y, s.rotation, s.color, s.size, s.alpha, glow);
+    }
+  });
+
+  // Dragged on top
+  if (dragged) {
+    drawPoly(dragged.verts, dragged.x, dragged.y, dragged.rotation, dragged.color, dragged.size, 1, glow * 2);
+  }
+
+  // Particles
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = p.color;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+// Mouse interactions
+function getShapeAt(x, y) {
+  for (let i = shapes.length - 1; i >= 0; i--) {
+    const s = shapes[i];
+    const dx = x - s.x, dy = y - s.y;
+    if (Math.sqrt(dx*dx + dy*dy) < s.size * 1.2) return s;
+  }
+  return null;
+}
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  mouseDown = true;
+  mouseDownX = e.clientX;
+  mouseDownY = e.clientY;
+  const shape = getShapeAt(e.clientX, e.clientY);
+  if (shape) {
+    dragged = shape;
+    dragOffX = e.clientX - shape.x;
+    dragOffY = e.clientY - shape.y;
+    canvas.style.cursor = 'grabbing';
+  } else {
+    spawnShape(e.clientX, e.clientY);
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  mouseX = e.clientX; mouseY = e.clientY;
+  if (dragged) {
+    dragged.x = e.clientX - dragOffX;
+    dragged.y = e.clientY - dragOffY;
+    dragged.trail = [];
+  } else {
+    const shape = getShapeAt(e.clientX, e.clientY);
+    canvas.style.cursor = shape ? 'grab' : 'crosshair';
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (dragged && mouseDown) {
+    const dx = e.clientX - mouseDownX;
+    const dy = e.clientY - mouseDownY;
+    dragged.vx = dx * 0.15;
+    dragged.vy = dy * 0.15;
+  }
+  dragged = null;
+  mouseDown = false;
+  canvas.style.cursor = 'crosshair';
+});
+
+canvas.addEventListener('mouseleave', () => {
+  dragged = null;
+  mouseDown = false;
+});
+
+// Touch
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseDown = true;
+  mouseDownX = t.clientX; mouseDownY = t.clientY;
+  const shape = getShapeAt(t.clientX, t.clientY);
+  if (shape) {
+    dragged = shape;
+    dragOffX = t.clientX - shape.x;
+    dragOffY = t.clientY - shape.y;
+  } else {
+    spawnShape(t.clientX, t.clientY);
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  if (dragged) {
+    dragged.x = t.clientX - dragOffX;
+    dragged.y = t.clientY - dragOffY;
+    dragged.trail = [];
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  if (dragged) {
+    const t = e.changedTouches[0];
+    dragged.vx = (t.clientX - mouseDownX) * 0.1;
+    dragged.vy = (t.clientY - mouseDownY) * 0.1;
+  }
+  dragged = null;
+  mouseDown = false;
+});
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); clearAll(); }
+  if (e.code === 'KeyT') setShape('tri');
+  if (e.code === 'KeyQ') setShape('quad');
+  if (e.code === 'KeyH') setShape('hex');
+  if (e.code === 'KeyS') setShape('star');
+  if (e.code === 'Digit1') setMode('drag');
+  if (e.code === 'Digit2') setMode('attract');
+  if (e.code === 'Digit3') setMode('repel');
+  if (e.code === 'Digit4') setMode('gravity');
+});
+
+function clearAll() {
+  shapes.forEach(s => shatter(s));
+  shapes = [];
+  updateCount();
+}
+
+// Spawn a few initial shapes for demo
+setTimeout(() => {
+  for (let i = 0; i < 3; i++) {
+    const x = W * 0.3 + Math.random() * W * 0.4;
+    const y = H * 0.3 + Math.random() * H * 0.3;
+    shapes.push(createPoly(x, y, ['tri','quad','hex','star'][i], (Math.random()-0.5)*3, (Math.random()-0.5)*3));
+  }
+  updateCount();
+}, 500);
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
