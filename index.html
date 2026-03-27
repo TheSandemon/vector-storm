@@ -180,6 +180,25 @@ input[type=range]::-webkit-slider-thumb {
   <span class="info-display" id="count">0 shapes</span>
   <span class="info-display" id="themeTag" style="color:#D4A853;">THEME: <span id="themeName">NEON</span></span>
   <span class="info-display" id="freezeTag" style="display:none;color:#88ffff;">❄ FROZEN</span>
+  <button class="btn" id="btn-arena" onclick="toggleArena()" style="margin-left:6px;border-color:#ff4466;color:#ff4466;">ARENA</button>
+  <span class="info-display" id="arenaScoreTag" style="display:none;color:#ff4466;">SCORE: <span id="arenaScore">0</span></span>
+  <span class="info-display" id="arenaComboTag" style="display:none;color:#ffcc00;">COMBO: <span id="arenaCombo">x1</span></span>
+  <span class="info-display" id="arenaWaveTag" style="display:none;color:#44aaff;">WAVE: <span id="arenaWave">1</span></span>
+  <span class="info-display" id="arenaLivesTag" style="display:none;color:#ff4466;">LIVES: <span id="arenaLives">3</span></span>
+  <span class="info-display" id="arenaTimerTag" style="display:none;color:#00ff88;">TIME: <span id="arenaTimer">60</span></span>
+  <span class="info-display" id="arenaHighTag" style="display:none;color:#D4A853;">BEST: <span id="arenaHigh">0</span></span>
+</div>
+<div id="arena-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(10,10,10,0.88);z-index:20;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+  <h2 id="arena-title" style="font-family:Syncopate,sans-serif;font-size:36px;color:#D4A853;letter-spacing:6px;text-shadow:0 0 30px rgba(212,168,83,0.7);">ARENA MODE</h2>
+  <p id="arena-subtitle" style="font-family:Rajdhani,sans-serif;font-size:14px;color:#888;letter-spacing:3px;">THROW SHAPES INTO TARGETS TO SHATTER THEM</p>
+  <p id="arena-desc" style="font-family:Space Mono,monospace;font-size:11px;color:#555;letter-spacing:1px;max-width:400px;text-align:center;line-height:1.8;">CHAIN HITS FOR COMBO MULTIPLIERS<br>SURVIVE WAVES OF INCREASING DIFFICULTY<br>3 LIVES — DON'T LET TARGETS ESCAPE</p>
+  <div id="arena-gameover" style="display:none;text-align:center;">
+    <div style="font-family:Syncopate,sans-serif;font-size:22px;color:#ff4466;letter-spacing:4px;margin-bottom:8px;">GAME OVER</div>
+    <div style="font-family:Space Mono,monospace;font-size:13px;color:#D4A853;">FINAL SCORE: <span id="arena-final-score" style="color:#ff4466;">0</span></div>
+    <div style="font-family:Space Mono,monospace;font-size:11px;color:#555;margin-top:4px;">HIGH SCORE: <span id="arena-final-high" style="color:#D4A853;">0</span></div>
+    <div style="font-family:Space Mono,monospace;font-size:11px;color:#555;margin-top:4px;">WAVE REACHED: <span id="arena-final-wave" style="color:#44aaff;">1</span></div>
+  </div>
+  <button class="btn" id="arena-start-btn" onclick="startArenaGame()" style="font-size:13px;padding:10px 30px;border-color:#ff4466;color:#ff4466;letter-spacing:3px;">START</button>
 </div>
 <div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG TO THROW &nbsp;|&nbsp; 1-6 MODES &nbsp;|&nbsp; T/Q/P/H/O/S SHAPES &nbsp;|&nbsp; F FREEZE &nbsp;|&nbsp; Y THEME &nbsp;|&nbsp; SPACE CLEAR</div>
 <script>
@@ -926,9 +945,610 @@ setTimeout(() => {
   updateCount();
 }, 500);
 
+// ============================================================
+// ARENA MODE
+// ============================================================
+let arenaActive = false;
+let arenaStarted = false;
+let arenaScore = 0;
+let arenaCombo = 1;
+let arenaComboTimer = 0;
+let arenaWave = 1;
+let arenaLives = 3;
+let arenaTimer = 60;
+let arenaTimerMax = 60;
+let arenaHighScore = parseInt(localStorage.getItem('vs_high') || '0');
+let arenaTargets = [];
+let arenaLastSpawn = 0;
+let arenaTargetSpawnInterval = 2500;
+let arenaWaveTargetCount = 5;
+let arenaTargetsDestroyed = 0;
+let arenaTargetsThisWave = 0;
+let arenaFloatingTexts = [];
+let arenaWaveTransition = false;
+let arenaWaveTransitionTimer = 0;
+
+const targetColors = ['#ff4466','#ffaa00','#44aaff','#ff88ff','#00ff88'];
+
+function toggleArena() {
+  // Don't interrupt an active game
+  if (arenaStarted && arenaActive) return;
+  arenaActive = !arenaActive;
+  const overlay = document.getElementById('arena-overlay');
+  const btn = document.getElementById('btn-arena');
+  const scoreTag = document.getElementById('arenaScoreTag');
+  const comboTag = document.getElementById('arenaComboTag');
+  const waveTag = document.getElementById('arenaWaveTag');
+  const livesTag = document.getElementById('arenaLivesTag');
+  const timerTag = document.getElementById('arenaTimerTag');
+  const highTag = document.getElementById('arenaHighTag');
+  const gameover = document.getElementById('arena-gameover');
+  const title = document.getElementById('arena-title');
+  const subtitle = document.getElementById('arena-subtitle');
+  const desc = document.getElementById('arena-desc');
+  const startBtn = document.getElementById('arena-start-btn');
+
+  if (arenaActive) {
+    // Reset arena state
+    arenaScore = 0;
+    arenaCombo = 1;
+    arenaComboTimer = 0;
+    arenaWave = 1;
+    arenaLives = 3;
+    arenaTimer = 60;
+    arenaTimerMax = 60;
+    arenaTargets = [];
+    arenaTargetsDestroyed = 0;
+    arenaTargetsThisWave = 0;
+    arenaFloatingTexts = [];
+    arenaWaveTransition = false;
+    arenaWaveTransitionTimer = 0;
+    arenaLastSpawn = Date.now();
+    arenaTargetSpawnInterval = 2500;
+    arenaWaveTargetCount = 5;
+    arenaHighScore = parseInt(localStorage.getItem('vs_high') || '0');
+    arenaStarted = false;
+
+    // Clear sandbox shapes
+    shapes = [];
+    debris = [];
+    particles = [];
+    sparks = [];
+    collisionCount = 0;
+    maxVel = 0;
+    lastMaxVel = 0;
+    updateCount();
+
+    overlay.style.display = 'flex';
+    gameover.style.display = 'none';
+    title.textContent = 'ARENA MODE';
+    title.style.color = '#D4A853';
+    subtitle.style.display = 'block';
+    desc.style.display = 'block';
+    startBtn.textContent = 'START';
+    startBtn.style.display = 'inline-block';
+
+    // Show HUD tags
+    scoreTag.style.display = 'inline';
+    comboTag.style.display = 'inline';
+    waveTag.style.display = 'inline';
+    livesTag.style.display = 'inline';
+    timerTag.style.display = 'inline';
+    highTag.style.display = 'inline';
+    document.getElementById('arenaHigh').textContent = arenaHighScore;
+
+    btn.classList.add('active');
+  } else {
+    overlay.style.display = 'none';
+    scoreTag.style.display = 'none';
+    comboTag.style.display = 'none';
+    waveTag.style.display = 'none';
+    livesTag.style.display = 'none';
+    timerTag.style.display = 'none';
+    highTag.style.display = 'none';
+    btn.classList.remove('active');
+    arenaTargets = [];
+    arenaFloatingTexts = [];
+  }
+}
+
+function startArenaGame() {
+  arenaStarted = true;
+  arenaScore = 0;
+  arenaCombo = 1;
+  arenaComboTimer = 0;
+  arenaWave = 1;
+  arenaLives = 3;
+  arenaTimer = 60;
+  arenaTimerMax = 60;
+  arenaTargets = [];
+  arenaTargetsDestroyed = 0;
+  arenaTargetsThisWave = 0;
+  arenaFloatingTexts = [];
+  arenaWaveTransition = false;
+  arenaLastSpawn = Date.now();
+  arenaTargetSpawnInterval = 2500;
+  arenaWaveTargetCount = 5;
+  arenaHighScore = parseInt(localStorage.getItem('vs_high') || '0');
+
+  // Spawn initial target
+  spawnArenaTarget();
+
+  document.getElementById('arena-overlay').style.display = 'none';
+  updateArenaHUD();
+}
+
+function spawnArenaTarget() {
+  const margin = 100;
+  const x = margin + Math.random() * (W - margin * 2);
+  const y = margin + Math.random() * (H - margin * 2);
+  const types = ['tri','quad','hex','oct','star'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const size = 35 + arenaWave * 3;
+  const hp = 1 + arenaWave * 0.5;
+  const speed = 0.5 + arenaWave * 0.15;
+  const color = targetColors[Math.floor(Math.random() * targetColors.length)];
+  const angle = Math.random() * Math.PI * 2;
+  const vx = Math.cos(angle) * speed;
+  const vy = Math.sin(angle) * speed;
+  arenaTargets.push({
+    x, y, vx, vy, size, hp, maxHp: hp,
+    damage: 0, scale: size / 50,
+    type, color, alpha: 1, rotation: 0,
+    rotSpeed: (Math.random() - 0.5) * 0.03,
+    flash: 0, pulse: 0, pulseDir: 1
+  });
+}
+
+function damageArenaTarget(target, amount) {
+  target.hp -= amount;
+  target.flash = 1;
+  target.damage += amount * 0.3;
+  if (target.hp <= 0) {
+    destroyArenaTarget(target);
+  }
+}
+
+function destroyArenaTarget(target) {
+  // Score with combo
+  const baseScore = Math.floor(50 * target.scale);
+  const finalScore = baseScore * arenaCombo;
+  arenaScore += finalScore;
+
+  // Combo
+  arenaCombo = Math.min(arenaCombo + 1, 10);
+  arenaComboTimer = 180; // frames (~3 seconds at 60fps)
+
+  // Floating text
+  arenaFloatingTexts.push({
+    x: target.x, y: target.y,
+    text: '+' + finalScore,
+    color: arenaCombo >= 5 ? '#ffcc00' : target.color,
+    life: 1, vy: -1.5
+  });
+  if (arenaCombo >= 3) {
+    arenaFloatingTexts.push({
+      x: target.x, y: target.y - 22,
+      text: 'COMBO x' + arenaCombo,
+      color: '#ffcc00',
+      life: 1, vy: -1.2
+    });
+  }
+
+  // Destruction effect
+  flashScreen();
+  shake(10);
+  spawnSparks(target.x, target.y, target.color, 20, 1.5);
+
+  // Particles burst
+  const count = 20;
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 6 + 2;
+    particles.push({
+      x: target.x + (Math.random()-0.5)*target.size,
+      y: target.y + (Math.random()-0.5)*target.size,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.015 + 0.01,
+      size: Math.random() * 3 + 1.5,
+      color: target.color
+    });
+  }
+
+  // Debris
+  const debrisCount = 4 + Math.floor(target.scale * 2);
+  for (let i = 0; i < debrisCount; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 3 + 1;
+    debris.push({
+      x: target.x, y: target.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.008 + 0.005,
+      size: Math.random() * 7 + 3,
+      color: target.color,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.15
+    });
+  }
+
+  // Remove target
+  const idx = arenaTargets.indexOf(target);
+  if (idx !== -1) arenaTargets.splice(idx, 1);
+  arenaTargetsDestroyed++;
+  arenaTargetsThisWave++;
+
+  // Check wave clear
+  if (arenaTargetsThisWave >= arenaWaveTargetCount) {
+    startWaveTransition();
+  }
+
+  // High score
+  if (arenaScore > arenaHighScore) {
+    arenaHighScore = arenaScore;
+    localStorage.setItem('vs_high', arenaHighScore);
+    document.getElementById('arenaHigh').textContent = arenaHighScore;
+  }
+}
+
+function startWaveTransition() {
+  arenaWaveTransition = true;
+  arenaWaveTransitionTimer = 120; // 2 seconds
+
+  // Wave clear bonus
+  const bonus = 200 + arenaWave * 100;
+  arenaScore += bonus;
+  arenaFloatingTexts.push({
+    x: W/2, y: H/2 - 60,
+    text: 'WAVE ' + arenaWave + ' CLEAR!',
+    color: '#44aaff',
+    life: 1.5, vy: -0.5
+  });
+  arenaFloatingTexts.push({
+    x: W/2, y: H/2 - 20,
+    text: '+' + bonus + ' BONUS',
+    color: '#D4A853',
+    life: 1.5, vy: -0.3
+  });
+  shake(15);
+  flashScreen();
+  spawnSparks(W/2, H/2, '#44aaff', 40, 2);
+}
+
+function endArenaGame() {
+  arenaActive = false;
+  arenaStarted = false;
+
+  // Check high score
+  if (arenaScore > arenaHighScore) {
+    arenaHighScore = arenaScore;
+    localStorage.setItem('vs_high', arenaHighScore);
+  }
+
+  const overlay = document.getElementById('arena-overlay');
+  const title = document.getElementById('arena-title');
+  const subtitle = document.getElementById('arena-subtitle');
+  const desc = document.getElementById('arena-desc');
+  const startBtn = document.getElementById('arena-start-btn');
+  const gameover = document.getElementById('arena-gameover');
+
+  overlay.style.display = 'flex';
+  title.textContent = 'GAME OVER';
+  title.style.color = '#ff4466';
+  subtitle.style.display = 'none';
+  desc.style.display = 'none';
+  startBtn.textContent = 'PLAY AGAIN';
+  startBtn.onclick = startArenaGame;
+  gameover.style.display = 'block';
+  document.getElementById('arena-final-score').textContent = arenaScore;
+  document.getElementById('arena-final-high').textContent = arenaHighScore;
+  document.getElementById('arena-final-wave').textContent = arenaWave;
+
+  document.getElementById('arenaScoreTag').style.display = 'none';
+  document.getElementById('arenaComboTag').style.display = 'none';
+  document.getElementById('arenaWaveTag').style.display = 'none';
+  document.getElementById('arenaLivesTag').style.display = 'none';
+  document.getElementById('arenaTimerTag').style.display = 'none';
+  document.getElementById('arenaHighTag').style.display = 'none';
+  document.getElementById('btn-arena').classList.remove('active');
+
+  arenaTargets = [];
+  arenaFloatingTexts = [];
+}
+
+// Override shatter to detect arena hits
+const _origShatter = shatter;
+function shatter(shape, skipParticles) {
+  if (arenaActive) {
+    // Check if any target is nearby when this shape shatters
+    for (let i = arenaTargets.length - 1; i >= 0; i--) {
+      const t = arenaTargets[i];
+      const dx = t.x - shape.x, dy = t.y - shape.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < t.size + shape.size) {
+        damageArenaTarget(t, 1 + shape.damage);
+      }
+    }
+  }
+  _origShatter(shape, skipParticles);
+}
+
+function updateArena() {
+  if (!arenaActive || arenaWaveTransition) return;
+
+  const now = Date.now();
+
+  // Combo timer decay
+  if (arenaComboTimer > 0) {
+    arenaComboTimer--;
+    if (arenaComboTimer <= 0) {
+      arenaCombo = 1;
+    }
+  }
+
+  // Wave timer countdown
+  arenaTimer -= 1/60;
+  if (arenaTimer <= 0) {
+    arenaTimer = 0;
+    // Lose a life for timeout
+    arenaLives--;
+    arenaCombo = 1;
+    shake(12);
+    flashScreen();
+    if (arenaLives <= 0) {
+      endArenaGame();
+      return;
+    }
+  }
+
+  // Target spawning
+  if (now - arenaLastSpawn > arenaTargetSpawnInterval && arenaTargets.length < arenaWaveTargetCount + 2) {
+    spawnArenaTarget();
+    arenaLastSpawn = now;
+  }
+
+  // Update targets
+  for (let i = arenaTargets.length - 1; i >= 0; i--) {
+    const t = arenaTargets[i];
+    t.x += t.vx;
+    t.y += t.vy;
+    t.rotation += t.rotSpeed;
+    t.flash *= 0.8;
+    t.damage *= 0.98;
+    t.pulse += 0.04 * t.pulseDir;
+    if (t.pulse > 1 || t.pulse < 0) t.pulseDir *= -1;
+
+    // Bounce off edges
+    const margin = t.size;
+    if (t.x < margin) { t.x = margin; t.vx = Math.abs(t.vx); }
+    if (t.x > W - margin) { t.x = W - margin; t.vx = -Math.abs(t.vx); }
+    if (t.y < margin) { t.y = margin; t.vy = Math.abs(t.vy); }
+    if (t.y > H - margin) { t.y = H - margin; t.vy = -Math.abs(t.vy); }
+
+    // Check collision with shapes
+    for (let j = shapes.length - 1; j >= 0; j--) {
+      const s = shapes[j];
+      const dx = t.x - s.x, dy = t.y - s.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < t.size + s.size * 0.7) {
+        // Shape hits target
+        const impactSpeed = Math.sqrt(s.vx*s.vx + s.vy*s.vy);
+        damageArenaTarget(t, impactSpeed * 0.3 + 0.5);
+        // Damage the shape too
+        if (s.damage === undefined) s.damage = 0;
+        s.damage += 0.4;
+        // Bounce shape
+        const nx = dx/dist, ny = dy/dist;
+        s.vx = nx * impactSpeed * 0.5;
+        s.vy = ny * impactSpeed * 0.5;
+        // Sparks
+        spawnSparks((t.x+s.x)/2, (t.y+s.y)/2, '#ffffff', 8, 0.8);
+      }
+    }
+  }
+
+  // Floating texts
+  for (let i = arenaFloatingTexts.length - 1; i >= 0; i--) {
+    const ft = arenaFloatingTexts[i];
+    ft.y += ft.vy;
+    ft.life -= 0.016;
+    if (ft.life <= 0) arenaFloatingTexts.splice(i, 1);
+  }
+
+  // Wave transition timer
+  if (arenaWaveTransition) {
+    arenaWaveTransitionTimer--;
+    if (arenaWaveTransitionTimer <= 0) {
+      arenaWaveTransition = false;
+      arenaWave++;
+      arenaTargetsThisWave = 0;
+      arenaTimer = Math.max(30, 60 - arenaWave * 3);
+      arenaTimerMax = arenaTimer;
+      arenaWaveTargetCount = 5 + arenaWave * 2;
+      arenaTargetSpawnInterval = Math.max(800, 2500 - arenaWave * 200);
+      arenaLastSpawn = Date.now();
+    }
+  }
+}
+
+function drawArenaTargets() {
+  arenaTargets.forEach(t => {
+    const flashAmt = t.flash;
+    const glowAmt = 12 + t.pulse * 6;
+    const col = flashAmt > 0.1 ? lerpColor(t.color, '#ffffff', flashAmt * 0.7) : t.color;
+
+    ctx.save();
+    ctx.translate(t.x, t.y);
+    ctx.globalAlpha = t.alpha;
+    ctx.shadowBlur = glowAmt;
+    ctx.shadowColor = t.color;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+
+    // HP bar
+    const hpRatio = Math.max(0, t.hp / t.maxHp);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(-t.size, -t.size - 12, t.size * 2, 5);
+    const hpColor = hpRatio > 0.5 ? t.color : (hpRatio > 0.25 ? '#ffcc00' : '#ff2222');
+    ctx.fillStyle = hpColor;
+    ctx.fillRect(-t.size, -t.size - 12, t.size * 2 * hpRatio);
+
+    ctx.translate(0, 0);
+    ctx.rotate(t.rotation);
+
+    // Target polygon
+    const verts = [];
+    let sides;
+    switch(t.type) {
+      case 'tri': sides = 3; break;
+      case 'quad': sides = 4; break;
+      case 'hex': sides = 6; break;
+      case 'oct': sides = 8; break;
+      case 'star': sides = 5; break;
+      default: sides = 6;
+    }
+    for (let i = 0; i < sides; i++) {
+      const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+      let r = t.size;
+      if (t.type === 'star') r = (i % 2 === 0) ? t.size : t.size * 0.4;
+      verts.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+    }
+    ctx.shadowBlur = glowAmt;
+    ctx.shadowColor = t.color;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    verts.forEach((v, i) => {
+      if (i === 0) ctx.moveTo(v.x, v.y);
+      else ctx.lineTo(v.x, v.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+
+    // Pulsing inner ring
+    ctx.globalAlpha = t.alpha * 0.3 * t.pulse;
+    ctx.strokeStyle = t.color;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, t.size * 0.6, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // Damage ring
+    if (t.damage > 0.15) {
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.globalAlpha = t.damage * 0.5;
+      ctx.strokeStyle = '#ff2222';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, t.size * 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  });
+}
+
+function drawArenaFloatingTexts() {
+  arenaFloatingTexts.forEach(ft => {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, ft.life * 2);
+    ctx.font = 'bold 16px Space Mono';
+    ctx.fillStyle = ft.color;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = ft.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.restore();
+  });
+}
+
+function drawArenaWaveTransition() {
+  if (!arenaWaveTransition) return;
+  const alpha = Math.min(1, arenaWaveTransitionTimer / 30);
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fillStyle = '#44aaff';
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 48px Syncopate';
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowBlur = 40;
+  ctx.shadowColor = '#44aaff';
+  ctx.textAlign = 'center';
+  ctx.fillText('WAVE ' + (arenaWave + 1), W/2, H/2);
+  ctx.font = '14px Space Mono';
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#88ccff';
+  ctx.fillText('GET READY...', W/2, H/2 + 35);
+  ctx.restore();
+}
+
+function updateArenaHUD() {
+  document.getElementById('arenaScore').textContent = arenaScore;
+  document.getElementById('arenaCombo').textContent = 'x' + arenaCombo;
+  document.getElementById('arenaWave').textContent = arenaWave;
+  document.getElementById('arenaLives').textContent = arenaLives;
+  document.getElementById('arenaTimer').textContent = Math.ceil(arenaTimer);
+  document.getElementById('arenaHigh').textContent = arenaHighScore;
+
+  // Timer color
+  const timerEl = document.getElementById('arenaTimer');
+  if (arenaTimer < 10) timerEl.style.color = '#ff2222';
+  else if (arenaTimer < 20) timerEl.style.color = '#ffcc00';
+  else timerEl.style.color = '#00ff88';
+
+  // Combo color
+  const comboEl = document.getElementById('arenaCombo');
+  if (arenaCombo >= 7) comboEl.style.color = '#ff2222';
+  else if (arenaCombo >= 4) comboEl.style.color = '#ffcc00';
+  else if (arenaCombo >= 2) comboEl.style.color = '#00ff88';
+  else comboEl.style.color = '#ffcc00';
+}
+
+function drawArenaOverlay() {
+  if (!arenaActive) return;
+
+  // Timer bar at top
+  const timerRatio = arenaTimer / arenaTimerMax;
+  const timerBarH = 3;
+  ctx.save();
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, W, timerBarH);
+  const timerColor = timerRatio > 0.3 ? '#00ff88' : (timerRatio > 0.1 ? '#ffcc00' : '#ff2222');
+  ctx.fillStyle = timerColor;
+  ctx.shadowBlur = 6;
+  ctx.shadowColor = timerColor;
+  ctx.fillRect(0, 0, W * timerRatio, timerBarH);
+  ctx.restore();
+
+  // Wave transition
+  drawArenaWaveTransition();
+}
+
+// Patch startArenaGame to be accessible from onclick
+window.startArenaGame = startArenaGame;
+
 function loop() {
   update();
+  if (arenaActive) {
+    updateArena();
+    updateArenaHUD();
+  }
   draw();
+  if (arenaActive) {
+    drawArenaTargets();
+    drawArenaFloatingTexts();
+    drawArenaOverlay();
+  }
   requestAnimationFrame(loop);
 }
 loop();
