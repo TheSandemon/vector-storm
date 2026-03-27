@@ -140,19 +140,24 @@ input[type=range]::-webkit-slider-thumb {
 </head>
 <body>
 <div id="shatter-flash"></div>
+<div id="frozen-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center, transparent 50%, rgba(136,255,255,0.08) 100%);"></div>
 <canvas id="c"></canvas>
 <div id="ui">
   <h1>VECTOR STORM</h1>
   <span class="label">SPAWN</span>
   <button class="btn active" id="btn-tri" onclick="setShape('tri')">TRI</button>
   <button class="btn" id="btn-quad" onclick="setShape('quad')">QUAD</button>
+  <button class="btn" id="btn-penta" onclick="setShape('penta')">PENTA</button>
   <button class="btn" id="btn-hex" onclick="setShape('hex')">HEX</button>
+  <button class="btn" id="btn-oct" onclick="setShape('oct')">OCT</button>
   <button class="btn" id="btn-star" onclick="setShape('star')">STAR</button>
   <span class="label" style="margin-left:6px">MODE</span>
   <button class="btn active" id="btn-drag" onclick="setMode('drag')">DRAG</button>
   <button class="btn" id="btn-attract" onclick="setMode('attract')">ATTRACT</button>
   <button class="btn" id="btn-repel" onclick="setMode('repel')">REPEL</button>
   <button class="btn" id="btn-gravity" onclick="setMode('gravity')">GRAVITY</button>
+  <button class="btn" id="btn-chain" onclick="setMode('chain')">CHAIN</button>
+  <button class="btn" id="btn-vortex" onclick="setMode('vortex')">VORTEX</button>
   <span class="slider-wrap">
     <label>SIZE</label>
     <input type="range" id="sSize" min="20" max="120" value="50">
@@ -173,8 +178,10 @@ input[type=range]::-webkit-slider-thumb {
   <span class="info-display">MAX VEL: <span id="maxVel">0.0</span></span>
   <span class="info-display">COLLISIONS: <span id="colCount">0</span></span>
   <span class="info-display" id="count">0 shapes</span>
+  <span class="info-display" id="themeTag" style="color:#D4A853;">THEME: <span id="themeName">NEON</span></span>
+  <span class="info-display" id="freezeTag" style="display:none;color:#88ffff;">❄ FROZEN</span>
 </div>
-<div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG TO THROW &nbsp;|&nbsp; COLLISIONS DAMAGE SHAPES &nbsp;|&nbsp; SPACE TO CLEAR</div>
+<div id="hint">CLICK TO SPAWN &nbsp;|&nbsp; DRAG TO THROW &nbsp;|&nbsp; 1-6 MODES &nbsp;|&nbsp; T/Q/P/H/O/S SHAPES &nbsp;|&nbsp; F FREEZE &nbsp;|&nbsp; Y THEME &nbsp;|&nbsp; SPACE CLEAR</div>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -226,18 +233,40 @@ let collisionCount = 0;
 let maxVel = 0;
 let lastMaxVel = 0;
 
+// Color themes: [stroke, particle, accent]
+const themes = {
+  neon: { stroke: '#00ff88', particle: '#D4A853', accent: '#00ff88', name: 'NEON' },
+  gold: { stroke: '#D4A853', particle: '#ffcc00', accent: '#D4A853', name: 'GOLD' },
+  cyber: { stroke: '#44aaff', particle: '#ff4466', accent: '#44aaff', name: 'CYBER' },
+  void: { stroke: '#ff88ff', particle: '#88ffff', accent: '#ff88ff', name: 'VOID' }
+};
+let currentTheme = 'neon';
+
+// Freeze state
+let frozen = false;
+let freezeTimer = 0;
+
 const shatterThreshold = 7.5; // speed at which shapes shatter
 const damageThreshold = 4.5;  // speed at which shapes start taking damage
 
 function setShape(s) {
   currentShape = s;
-  document.querySelectorAll('#btn-tri,#btn-quad,#btn-hex,#btn-star').forEach(b => b.classList.remove('active'));
-  document.getElementById('btn-' + s).classList.add('active');
+  document.querySelectorAll('#btn-tri,#btn-quad,#btn-penta,#btn-hex,#btn-oct,#btn-star').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn-' + s);
+  if (btn) btn.classList.add('active');
 }
 function setMode(m) {
   currentMode = m;
-  document.querySelectorAll('#btn-drag,#btn-attract,#btn-repel,#btn-gravity').forEach(b => b.classList.remove('active'));
-  document.getElementById('btn-' + m).classList.add('active');
+  document.querySelectorAll('#btn-drag,#btn-attract,#btn-repel,#btn-gravity,#btn-chain,#btn-vortex').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn-' + m);
+  if (btn) btn.classList.add('active');
+}
+function cycleTheme() {
+  const keys = Object.keys(themes);
+  const idx = keys.indexOf(currentTheme);
+  currentTheme = keys[(idx + 1) % keys.length];
+  document.getElementById('themeName').textContent = themes[currentTheme].name;
+  document.getElementById('themeName').style.color = themes[currentTheme].stroke;
 }
 
 document.getElementById('sSize').addEventListener('input', e => { sizeMult = e.target.value / 50; });
@@ -252,7 +281,9 @@ function createPoly(x, y, type, vx, vy, scale) {
   switch(type) {
     case 'tri': sides = 3; radius = size; break;
     case 'quad': sides = 4; radius = size * 0.8; break;
+    case 'penta': sides = 5; radius = size * 0.85; break;
     case 'hex': sides = 6; radius = size * 0.9; break;
+    case 'oct': sides = 8; radius = size * 0.9; break;
     case 'star': sides = 5; radius = size; break;
     default: sides = 3; radius = size;
   }
@@ -263,8 +294,8 @@ function createPoly(x, y, type, vx, vy, scale) {
     if (type === 'star') r = (i % 2 === 0) ? radius : radius * 0.4;
     verts.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
   }
-  const colors = ['#D4A853','#00ff88','#ff4466','#44aaff','#ff88ff','#ffcc00'];
-  const color = colors[Math.floor(Math.random() * colors.length)];
+  const themeColors = ['#D4A853','#00ff88','#ff4466','#44aaff','#ff88ff','#ffcc00'];
+  const color = themeColors[Math.floor(Math.random() * themeColors.length)];
   return {
     x, y, vx, vy, verts, color, alpha: 1, rotation: Math.random() * Math.PI * 2,
     rotSpeed: (Math.random() - 0.5) * 0.04,
@@ -326,6 +357,21 @@ function spawnSparks(x, y, color, count, speedMult) {
 }
 
 function shatter(shape, skipParticles) {
+  // Chain reaction: nearby damaged shapes take bonus damage when this shatters
+  if (currentMode === 'chain') {
+    for (let i = 0; i < shapes.length; i++) {
+      const s = shapes[i];
+      if (s === shape) continue;
+      const dx = s.x - shape.x, dy = s.y - shape.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 150) {
+        // Bonus damage proportional to proximity and this shape's damage
+        const bonus = (1 - dist/150) * shape.damage * 0.6;
+        damageShape(s, bonus);
+      }
+    }
+  }
+
   const count = Math.floor(shape.verts.length * 2 + shape.size * 0.3);
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -404,6 +450,17 @@ function checkCollision(a, b) {
 }
 
 function update() {
+  if (frozen) {
+    // Still update visual effects when frozen
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.x += p.vx; p.vy *= 0.95;
+      p.life -= p.decay;
+      if (p.life <= 0) sparks.splice(i, 1);
+    }
+    document.getElementById('maxVel').textContent = '0.0';
+    return;
+  }
   const g = 0.15 * gravMult;
 
   // Decay shake
@@ -429,6 +486,29 @@ function update() {
       const dist = Math.sqrt(dx*dx + dy*dy) || 1;
       s.vx += (dx / dist) * 0.15 * sensMult;
       s.vy += (dy / dist) * 0.15 * sensMult;
+    } else if (currentMode === 'vortex') {
+      // Spiral vortex toward center
+      const dx = cx - s.x, dy = cy - s.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      // Tangential force (perpendicular) + inward pull
+      const tx = -dy / dist, ty = dx / dist;
+      const pull = 0.06 * sensMult;
+      s.vx += tx * pull + (dx / dist) * pull * 0.5;
+      s.vy += ty * pull + (dy / dist) * pull * 0.5;
+    }
+    // CHAIN mode: shapes near damaged shapes get a nudge toward them
+    if (currentMode === 'chain') {
+      for (let j = 0; j < shapes.length; j++) {
+        if (i === j) continue;
+        const s2 = shapes[j];
+        const dx = s2.x - s.x, dy = s2.y - s.y;
+        const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+        if (dist < 120 && s2.damage > 0.3) {
+          // Slight attraction toward damaged shape (chain reaction prep)
+          s.vx += (dx / dist) * 0.03 * s2.damage;
+          s.vy += (dy / dist) * 0.03 * s2.damage;
+        }
+      }
     }
   }
 
@@ -801,12 +881,26 @@ document.addEventListener('keydown', e => {
   if (e.code === 'Space') { e.preventDefault(); clearAll(); }
   if (e.code === 'KeyT') setShape('tri');
   if (e.code === 'KeyQ') setShape('quad');
+  if (e.code === 'KeyP') setShape('penta');
   if (e.code === 'KeyH') setShape('hex');
+  if (e.code === 'KeyO') setShape('oct');
   if (e.code === 'KeyS') setShape('star');
   if (e.code === 'Digit1') setMode('drag');
   if (e.code === 'Digit2') setMode('attract');
   if (e.code === 'Digit3') setMode('repel');
   if (e.code === 'Digit4') setMode('gravity');
+  if (e.code === 'Digit5') setMode('chain');
+  if (e.code === 'Digit6') setMode('vortex');
+  if (e.code === 'KeyY') cycleTheme();
+  if (e.code === 'KeyF') {
+    frozen = !frozen;
+    document.getElementById('freezeTag').style.display = frozen ? 'inline' : 'none';
+    document.getElementById('frozen-overlay').style.display = frozen ? 'block' : 'none';
+    if (frozen) {
+      shake(3);
+      spawnSparks(cx, cy, themes[currentTheme].accent, 20, 1.5);
+    }
+  }
 });
 
 function clearAll() {
@@ -821,7 +915,8 @@ function clearAll() {
   updateCount();
 }
 
-// Spawn initial demo shapes
+document.getElementById('themeName').textContent = themes[currentTheme].name;
+document.getElementById('themeName').style.color = themes[currentTheme].stroke;
 setTimeout(() => {
   for (let i = 0; i < 3; i++) {
     const x = W * 0.3 + Math.random() * W * 0.4;
